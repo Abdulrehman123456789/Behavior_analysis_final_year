@@ -1,0 +1,259 @@
+<!doctype html>
+<html>
+<head>
+    <title>BEHAVIOR ANALYSIS</title>
+    <meta charset='utf-8'>
+</head>
+<body>
+<div class="contentarea">
+	<h1>
+		BEHEVIOR ANALYSIS
+	</h1>
+  <div class="camera">
+    <video id="video">Video stream not available.</video>
+    <input type="button" id="startbutton" value="STRAT" onclick="start()"/>
+    <input type="button" id="stopbutton" value="Stop" onclick="stop()"/> 
+    <input type="button" id="IB" value="IMAGE_BACKGROUND" onclick="IB()"/>
+    <input type="button" id="WB" value="WHITE_BACKGROUND" onclick="WB()"/> 
+  </div>
+  <canvas id="canvas">
+  </canvas>
+  <div class="output">
+    <img id="photo" alt="The screen capture will appear in this box.">  
+    <img id="finalphoto" alt="The screen capture will appear in this box."> 
+</div>
+
+
+
+
+
+ <!-- Load TensorFlow.js -->
+ <script src="https://unpkg.com/@tensorflow/tfjs"></script>
+ <!-- Load Posenet -->
+ <script src="https://unpkg.com/@tensorflow-models/posenet"></script>
+
+
+<script>
+
+    // The width and height of the captured photo. We will set the
+    // width to the value defined here, but the height will be
+    // calculated based on the aspect ratio of the input stream.
+  
+    var width = 320;    // We will scale the photo width to this
+    var height = 300;     // This will be computed based on the input stream
+  
+    // |streaming| indicates whether or not we're currently streaming
+    // video from the camera. Obviously, we start at false.
+  
+    var streaming = false;
+
+    background_status="1";
+  
+    // The various HTML elements we need to configure or control. These
+    // will be set by the startup() function.
+  
+    var video = null;
+    var canvas = null;
+    var photo = null;
+    var startbutton = null;
+    var interval = null;
+    var finalphoto = null;
+  
+    function startup() {
+      video = document.getElementById('video');
+      canvas = document.getElementById('canvas');
+      photo = document.getElementById('photo');
+      finalphoto = document.getElementById('finalphoto');
+      startbutton = document.getElementById('startbutton');
+  
+      navigator.mediaDevices.getUserMedia({video: true, audio: false})
+      .then(function(stream) {
+        video.srcObject = stream;
+        video.play();
+      })
+      .catch(function(err) {
+        console.log("An error occurred: " + err);
+      });
+  
+      clearphoto();
+    }
+  
+    // Fill the photo with an indication that none has been
+    // captured.
+  
+    function clearphoto() {
+      var context = canvas.getContext('2d');
+      context.fillStyle = "#AAA";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+  
+      var data = canvas.toDataURL('image/png');
+      photo.setAttribute('src', data);
+      finalphoto.setAttribute('src', data);
+    }
+    
+    // Capture a photo by fetching the current contents of the video
+    // and drawing it into a canvas, then converting that to a PNG
+    // format data URL. By drawing it on an offscreen canvas and then
+    // drawing that to the screen, we can change its size and/or apply
+    // other changes before drawing it.
+  
+    function takepicture() {
+      var context = canvas.getContext('2d');
+        canvas.width = width;
+        canvas.height = height;
+        context.drawImage(video, 0, 0, width, height);
+      
+        var imagedata = canvas.toDataURL('image/png');
+        photo.setAttribute('src', imagedata);
+        //console.log(imagedata);
+
+
+
+
+
+//ditecting the poseture using posenet library of tensorflow module 
+
+    var imageScaleFactor = 0.5;
+    var outputStride = 16;
+    var flipHorizontal = false;
+    // get up to 5 poses
+    var maxPoseDetections = 10;
+    // minimum confidence of the root part of a pose
+    var scoreThreshold = 0.5;
+    // minimum distance in pixels between the root parts of poses
+    var nmsRadius = 20;
+
+  
+
+     
+     
+var imageElement = document.getElementById('photo');
+
+posenet.load().then(function(net){
+return net.estimateMultiplePoses(
+imageElement, imageScaleFactor, flipHorizontal, outputStride,maxPoseDetections, scoreThreshold, nmsRadius)
+}).then(function(pose){
+
+
+  console.log(pose);
+
+
+
+
+
+
+
+
+
+
+if(pose.length>0)
+
+{
+ 
+//converting object into string  
+
+
+
+   var posemainstring="";
+   posemainstring=pose.length.toString()+"%";
+  for(var i=0;i<pose.length;i++)
+      {
+        posemainstring=posemainstring+i.toString()+"||"+pose[i].score.toString()+"$";
+       for (var j=0;j<17;j++)
+       {
+          posemainstring=posemainstring+pose[i].keypoints[j].part+"&"+pose[i].keypoints[j].position.x.toString()+"&"+pose[i].keypoints[j].position.y.toString()+"&";
+    
+       }
+    posemainstring=posemainstring+"????";
+      }
+
+
+
+
+//console.log(posemainstring);
+
+//connecting to pythonserver
+
+
+  var ws = new WebSocket("ws://192.168.43.7:5678/");        
+               ws.onopen=function() {
+                     console.log("connected");
+                     ws.send(background_status+"::::"+posemainstring+"**********"+imagedata);
+			console.log("DATA SEND !!!!!!!!!");
+			
+
+                   }
+                   
+
+         
+             ws.onmessage=function(event)
+               {
+                var rdata=event.data;
+		console.log("data recieved");
+              	console.log(rdata);
+		finalphoto.setAttribute('src',rdata);
+                ws.close();
+              }
+
+              
+            
+
+
+}
+else
+{
+console.log("ENABLE TO DETECT THE POSETURE IN THE IMAGE")
+}
+
+
+
+})
+
+   
+}
+
+
+
+
+
+
+
+  
+    // Set up our event listener to run the startup process
+    // once loading is complete.
+    window.addEventListener('load', startup, false);
+  
+  
+  
+  
+   function start(e)
+   {
+  
+       alert("process started");
+       interval=setInterval("takepicture()",500);
+   }
+  
+   function stop(e)
+   {
+      alert("process stopped");
+      clearInterval(interval);
+      clearphoto();
+   }
+  
+
+   function IB(e)
+   {
+      background_status="1";
+   }
+  
+   function WB(e)
+   {
+      background_status="0";
+   }
+  
+      </script>
+
+
+
+</body>
+</html>
